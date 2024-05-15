@@ -68,63 +68,82 @@ let query = {
 const db = new sqlite3.Database("../.ponder/sqlite/ponder_sync.db");
 
 // Function to insert data into the logs table
-const insertLog = (log) => {
+const insertLogsBatch = (logs) => {
   const insertQuery = `
-    INSERT INTO logs (
+    INSERT OR IGNORE INTO logs (
       address, blockHash, blockNumber, chainId, data, id, logIndex,
       topic0, topic1, topic2, topic3, transactionHash, transactionIndex, checkpoint
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
-  const { number: blockNumber, hash: blockHash } = log.block;
-  const { logIndex, transactionIndex, transactionHash, data, address, topics } =
-    log.log;
+  const stmt = db.prepare(insertQuery);
 
-  if (blockNumber === undefined || logIndex === undefined) {
-    console.error("Missing block_number or log_index in log:", log);
-    return;
-  }
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    logs.forEach((log) => {
+      const { number: blockNumber, hash: blockHash } = log.block;
+      const {
+        logIndex,
+        transactionIndex,
+        transactionHash,
+        data,
+        address,
+        topics,
+      } = log.log;
 
-  const blockNumberStr = blockNumber.toString().padStart(79, "0");
-  const checkpoint = generateCheckpoint(blockNumber, logIndex); // Implement later
-
-  db.run(
-    insertQuery,
-    [
-      address,
-      blockHash,
-      blockNumberStr,
-      8453,
-      data,
-      `${blockHash}-${logIndex}`,
-      logIndex,
-      topics[0],
-      topics[1] || "",
-      topics[2] || "",
-      topics[3] || "",
-      transactionHash,
-      transactionIndex,
-      checkpoint,
-    ],
-    (err) => {
-      if (err) {
-        console.error("Error inserting log:", err.message);
+      if (blockNumber === undefined || logIndex === undefined) {
+        console.error("Missing block_number or log_index in log:", log);
+        return;
       }
-    }
-  );
+
+      const blockNumberStr = blockNumber.toString().padStart(79, "0");
+      const checkpoint = `checkpoint_${blockNumber}_${logIndex}`; // Implement later
+
+      stmt.run([
+        address,
+        blockHash,
+        blockNumberStr,
+        8453,
+        data,
+        `${blockHash}-${logIndex}`,
+        logIndex,
+        topics[0],
+        topics[1] || "",
+        topics[2] || "",
+        topics[3] || "",
+        transactionHash,
+        transactionIndex,
+        checkpoint,
+      ]);
+    });
+    db.run("COMMIT", (err) => {
+      if (err) {
+        console.error("Error committing transaction:", err.message);
+      }
+    });
+  });
+
+  stmt.finalize();
 };
 
 // Main function
 const main = async () => {
   let eventCount = 0;
   const startTime = performance.now();
+  const batchSize = 1000;
+  let eventBatch = [];
 
   // Initial non-parallelized request
   const res = await client.sendEventsReq(query);
   eventCount += res.events.length;
-  console.log("Initial events:", res.events);
-  res.events.forEach(insertLog);
+  //   console.log("Initial events:", res.events);
+  eventBatch.push(...res.events);
   query.fromBlock = res.nextBlock;
+
+  if (eventBatch.length >= batchSize) {
+    insertLogsBatch(eventBatch);
+    eventBatch = [];
+  }
 
   // Streaming events in parallel
   const stream = await client.streamEvents(query, {
@@ -143,7 +162,12 @@ const main = async () => {
     }
 
     eventCount += res.events.length;
-    res.events.forEach(insertLog);
+    eventBatch.push(...res.events);
+
+    if (eventBatch.length >= batchSize) {
+      insertLogsBatch(eventBatch);
+      eventBatch = [];
+    }
 
     const currentTime = performance.now();
     const seconds = (currentTime - startTime) / 1000;
@@ -157,6 +181,11 @@ const main = async () => {
     );
   }
 
+  // Insert any remaining logs in the batch
+  if (eventBatch.length > 0) {
+    insertLogsBatch(eventBatch);
+  }
+
   // Close the database connection
   db.close((err) => {
     if (err) {
@@ -166,9 +195,3 @@ const main = async () => {
 };
 
 main();
-
-// Function to generate the checkpoint value (understand how ponder does this...)
-const generateCheckpoint = (blockNumber, logIndex) => {
-  // Change me
-  return `checkpoint_${blockNumber}_${logIndex}`;
-};
