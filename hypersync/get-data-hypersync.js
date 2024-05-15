@@ -29,24 +29,24 @@ let query = {
   ],
   fieldSelection: {
     block: [
-      //   "difficulty", need to fix encoding to bigint
+      "difficulty",
       "number",
       "timestamp",
       "hash",
-      "extraData",
-      "gasLimit",
-      "gasUsed",
-      "logsBloom",
+      "extra_data",
+      "gas_limit",
+      "gas_used",
+      "logs_bloom",
       "miner",
-      "mixHash",
+      "mix_hash",
       "nonce",
-      "parentHash",
-      "receiptsRoot",
-      "sha3Uncles",
-      "stateRoot",
-      "totalDifficulty",
-      "transactionsRoot",
-      //   "size", need to fix encoding to bigint
+      "parent_hash",
+      "receipts_root",
+      "sha3_uncles",
+      "state_root",
+      "total_difficulty",
+      "transactions_root",
+      "size",
     ],
     log: [
       "block_number",
@@ -67,6 +67,21 @@ let query = {
 
 // Connect to SQLite database
 const db = new sqlite3.Database("../.ponder/sqlite/ponder_sync.db");
+
+const convertHexToPaddedDecimal = (hexValue, totalLength) => {
+  try {
+    // Handle '0x00' explicitly
+    if (hexValue === "0x00") {
+      return "0".padStart(totalLength, "0");
+    }
+    // Convert hex to BigInt, then to string, then pad with leading zeros
+    const decimalValue = BigInt(hexValue).toString();
+    return decimalValue.padStart(totalLength, "0");
+  } catch (error) {
+    console.error(`Error converting hex value ${hexValue}:`, error);
+    return "0".padStart(totalLength, "0"); // Fallback to default value
+  }
+};
 
 // Function to insert data into the logs table
 const insertLogsBatch = (logs) => {
@@ -152,11 +167,11 @@ const insertBlocksBatch = (blocks) => {
     db.run("BEGIN TRANSACTION");
     blocks.forEach((block) => {
       const {
-        difficulty = "0".padStart(79, "0"),
+        difficulty = "0x00",
         extraData = "",
-        gasLimit = "0".padStart(79, "0"),
-        gasUsed = "0".padStart(79, "0"),
-        hash = "",
+        gasLimit = "0x00",
+        gasUsed = "0x00",
+        hash,
         logsBloom = "".padEnd(514, "0"),
         miner = "",
         nonce = "".padStart(18, "0"),
@@ -164,15 +179,14 @@ const insertBlocksBatch = (blocks) => {
         parentHash = "",
         receiptsRoot = "",
         sha3Uncles = "",
-        size = "0".padStart(79, "0"),
+        size = "0x00",
         stateRoot = "",
         timestamp,
-        totalDifficulty = "0".padStart(79, "0"),
+        totalDifficulty = "0x00",
         transactionsRoot = "",
-        baseFeePerGas = "0".padStart(79, "0"),
+        baseFeePerGas = "0x00",
         mixHash = "",
       } = block;
-
       if (
         number === undefined ||
         timestamp === undefined ||
@@ -184,6 +198,12 @@ const insertBlocksBatch = (blocks) => {
 
       const numberStr = number.toString().padStart(79, "0");
       const timestampStr = timestamp.toString().padStart(79, "0");
+      const difficultyStr = convertHexToPaddedDecimal(difficulty, 79); // Convert difficulty to padded decimal
+      const gasLimitStr = convertHexToPaddedDecimal(gasLimit, 79); // Convert gasLimit to padded decimal
+      const gasUsedStr = convertHexToPaddedDecimal(gasUsed, 79); // Convert gasUsed to padded decimal
+      const sizeStr = convertHexToPaddedDecimal(size, 79); // Convert size to padded decimal
+      const totalDifficultyStr = convertHexToPaddedDecimal(totalDifficulty, 79); // Convert totalDifficulty to padded decimal
+      const baseFeePerGasStr = convertHexToPaddedDecimal(baseFeePerGas, 79); // Convert baseFeePerGas to padded decimal
       const checkpointValue = encodeCheckpoint({
         blockTimestamp: timestamp,
         chainId: 8453n,
@@ -194,27 +214,27 @@ const insertBlocksBatch = (blocks) => {
       });
 
       stmt.run([
-        difficulty,
+        difficultyStr,
         extraData,
-        gasLimit,
-        gasUsed,
+        gasLimitStr,
+        gasUsedStr,
         hash,
         logsBloom,
         miner,
         numberStr,
         parentHash,
         receiptsRoot,
-        size,
+        sizeStr,
         stateRoot,
         timestampStr,
         transactionsRoot,
         8453,
         checkpointValue,
-        baseFeePerGas,
+        baseFeePerGasStr,
         mixHash,
         nonce,
         sha3Uncles,
-        totalDifficulty,
+        totalDifficultyStr,
       ]);
     });
     db.run("COMMIT", (err) => {
