@@ -96,16 +96,14 @@ const db = new sqlite3.Database("../.ponder/sqlite/ponder_sync.db");
 
 const convertHexToPaddedDecimal = (hexValue, totalLength) => {
   try {
-    // Handle '0x00' explicitly
     if (hexValue === "0x00") {
       return "0".padStart(totalLength, "0");
     }
-    // Convert hex to BigInt, then to string, then pad with leading zeros
     const decimalValue = BigInt(hexValue).toString();
     return decimalValue.padStart(totalLength, "0");
   } catch (error) {
     console.error(`Error converting hex value ${hexValue}:`, error);
-    return "0".padStart(totalLength, "0"); // Fallback to default value
+    return "0".padStart(totalLength, "0");
   }
 };
 
@@ -383,7 +381,7 @@ const extractUniqueBlocksAndTransactions = (events) => {
 const main = async () => {
   let eventCount = 0;
   const startTime = performance.now();
-  const batchSize = 1000;
+  const batchSize = 100;
   let eventBatch = [];
   let blockBatch = [];
   let transactionBatch = [];
@@ -418,7 +416,7 @@ const main = async () => {
   // Streaming events in parallel
   const stream = await client.streamEvents(query, {
     retry: true,
-    batchSize: 10000,
+    batchSize: 1000,
     concurrency: 12,
   });
 
