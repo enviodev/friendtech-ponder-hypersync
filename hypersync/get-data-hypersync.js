@@ -1,6 +1,7 @@
 import { keccak256, toHex } from "viem";
 import { HypersyncClient } from "@envio-dev/hypersync-client";
 import sqlite3 from "sqlite3";
+import { encodeCheckpoint, EVENT_TYPES } from "./checkpoint.js"; // Adjusted to import from the new JavaScript file
 
 // Event signatures and address
 const event_signatures = [
@@ -97,7 +98,16 @@ const insertLogsBatch = (logs) => {
       }
 
       const blockNumberStr = blockNumber.toString().padStart(79, "0");
-      const checkpoint = `checkpoint_${blockNumber}_${logIndex}`; // Implement later
+      const logIndexHex = `0x${logIndex.toString(16)}`; // Convert logIndex to hexadecimal
+      const id = `${blockHash}-${logIndexHex}`;
+      const checkpoint = encodeCheckpoint({
+        blockTimestamp: log.block.timestamp,
+        chainId: 8453n,
+        blockNumber: BigInt(blockNumber),
+        transactionIndex: BigInt(transactionIndex),
+        eventType: EVENT_TYPES.logs, // Assuming logs event type
+        eventIndex: BigInt(logIndex),
+      });
 
       stmt.run([
         address,
@@ -105,7 +115,7 @@ const insertLogsBatch = (logs) => {
         blockNumberStr,
         8453,
         data,
-        `${blockHash}-${logIndex}`,
+        id,
         logIndex,
         topics[0],
         topics[1] || "",
