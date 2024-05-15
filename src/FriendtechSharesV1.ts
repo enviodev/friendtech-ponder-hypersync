@@ -36,7 +36,7 @@ ponder.on("FriendtechSharesV1:Trade", async ({ event, context }) => {
       traderAmount: traderAmount,
     },
   });
-
+  // console.log(tradeEvent);
   await Subject.upsert({
     id: subjectId,
     create: {
