@@ -61,7 +61,33 @@ let query = {
       "topic2",
       "topic3",
     ],
-    transaction: ["from"],
+    transaction: [
+      "block_hash",
+      "block_number",
+      "chain_id",
+      "contract_address",
+      "cumulative_gas_used",
+      "effective_gas_price",
+      "from",
+      "gas",
+      "gas_price",
+      "gas_used",
+      "hash",
+      "input",
+      "kind",
+      "logs_bloom",
+      "max_fee_per_gas",
+      "max_priority_fee_per_gas",
+      "nonce",
+      "r",
+      "root",
+      "s",
+      "status",
+      "to",
+      "transaction_index",
+      "v",
+      "value",
+    ],
   },
 };
 
@@ -70,16 +96,14 @@ const db = new sqlite3.Database("../.ponder/sqlite/ponder_sync.db");
 
 const convertHexToPaddedDecimal = (hexValue, totalLength) => {
   try {
-    // Handle '0x00' explicitly
     if (hexValue === "0x00") {
       return "0".padStart(totalLength, "0");
     }
-    // Convert hex to BigInt, then to string, then pad with leading zeros
     const decimalValue = BigInt(hexValue).toString();
     return decimalValue.padStart(totalLength, "0");
   } catch (error) {
     console.error(`Error converting hex value ${hexValue}:`, error);
-    return "0".padStart(totalLength, "0"); // Fallback to default value
+    return "0".padStart(totalLength, "0");
   }
 };
 
@@ -247,34 +271,131 @@ const insertBlocksBatch = (blocks) => {
   stmt.finalize();
 };
 
-// Function to extract unique blocks from events
-const extractUniqueBlocks = (events) => {
+// Function to insert data into the transactions table
+const insertTransactionsBatch = (transactions) => {
+  const insertQuery = `
+      INSERT OR IGNORE INTO transactions (
+        accessList, blockHash, blockNumber, chainId, "from", gas, gasPrice, hash,
+        input, maxFeePerGas, maxPriorityFeePerGas, nonce, "to", transactionIndex,
+        type, value, r, s, v
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+  const stmt = db.prepare(insertQuery);
+
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    transactions.forEach((tx) => {
+      const {
+        accessList = "[]",
+        blockHash,
+        blockNumber,
+        from,
+        gas = "0x00",
+        gasPrice = "0x00",
+        hash,
+        input = "",
+        maxFeePerGas = "0x00",
+        maxPriorityFeePerGas = "0x00",
+        nonce,
+        to,
+        transactionIndex,
+        type = "0x2",
+        value = "0x00",
+        r,
+        s,
+        v,
+      } = tx;
+
+      const blockNumberStr = blockNumber.toString().padStart(79, "0");
+      const gasStr = convertHexToPaddedDecimal(gas, 79);
+      const gasPriceStr = convertHexToPaddedDecimal(gasPrice, 79);
+      const maxFeePerGasStr = convertHexToPaddedDecimal(maxFeePerGas, 79);
+      const maxPriorityFeePerGasStr = convertHexToPaddedDecimal(
+        maxPriorityFeePerGas,
+        79
+      );
+      const valueStr = convertHexToPaddedDecimal(value, 79);
+      const vStr = convertHexToPaddedDecimal(v, 79);
+
+      // Convert nonce from hex to decimal
+      const nonceDecimal = parseInt(nonce, 16);
+
+      stmt.run([
+        accessList,
+        blockHash,
+        blockNumberStr,
+        8453,
+        from,
+        gasStr,
+        gasPriceStr,
+        hash,
+        input,
+        maxFeePerGasStr,
+        maxPriorityFeePerGasStr,
+        nonceDecimal,
+        to,
+        transactionIndex,
+        type,
+        valueStr,
+        r,
+        s,
+        vStr,
+      ]);
+    });
+    db.run("COMMIT", (err) => {
+      if (err) {
+        console.error("Error committing transaction:", err.message);
+      }
+    });
+  });
+
+  stmt.finalize();
+};
+
+// Function to extract unique blocks and transactions from events
+const extractUniqueBlocksAndTransactions = (events) => {
   const blockMap = new Map();
+  const transactionMap = new Map();
 
   events.forEach((event) => {
     const block = event.block;
+    const transaction = event.transaction;
+
     if (!blockMap.has(block.hash)) {
       blockMap.set(block.hash, block);
     }
+
+    if (!transactionMap.has(transaction.hash)) {
+      transactionMap.set(transaction.hash, transaction);
+    }
   });
 
-  return Array.from(blockMap.values());
+  return {
+    blocks: Array.from(blockMap.values()),
+    transactions: Array.from(transactionMap.values()),
+  };
 };
 
 // Main function
 const main = async () => {
   let eventCount = 0;
   const startTime = performance.now();
-  const batchSize = 1000;
+  const batchSize = 100;
   let eventBatch = [];
   let blockBatch = [];
+  let transactionBatch = [];
 
   // Initial non-parallelized request
   const res = await client.sendEventsReq(query);
   eventCount += res.events.length;
   console.log("Initial events:", res.events);
   eventBatch.push(...res.events);
-  blockBatch.push(...extractUniqueBlocks(res.events));
+  const { blocks, transactions } = extractUniqueBlocksAndTransactions(
+    res.events
+  );
+  blockBatch.push(...blocks);
+  transactionBatch.push(...transactions);
   query.fromBlock = res.nextBlock;
 
   if (eventBatch.length >= batchSize) {
@@ -287,10 +408,15 @@ const main = async () => {
     blockBatch = [];
   }
 
+  if (transactionBatch.length >= batchSize) {
+    insertTransactionsBatch(transactionBatch);
+    transactionBatch = [];
+  }
+
   // Streaming events in parallel
   const stream = await client.streamEvents(query, {
     retry: true,
-    batchSize: 10000,
+    batchSize: 1000,
     concurrency: 12,
   });
 
@@ -305,7 +431,11 @@ const main = async () => {
 
     eventCount += res.events.length;
     eventBatch.push(...res.events);
-    blockBatch.push(...extractUniqueBlocks(res.events));
+    const { blocks, transactions } = extractUniqueBlocksAndTransactions(
+      res.events
+    );
+    blockBatch.push(...blocks);
+    transactionBatch.push(...transactions);
 
     if (eventBatch.length >= batchSize) {
       insertLogsBatch(eventBatch);
@@ -315,6 +445,11 @@ const main = async () => {
     if (blockBatch.length >= batchSize) {
       insertBlocksBatch(blockBatch);
       blockBatch = [];
+    }
+
+    if (transactionBatch.length >= batchSize) {
+      insertTransactionsBatch(transactionBatch);
+      transactionBatch = [];
     }
 
     const currentTime = performance.now();
@@ -329,13 +464,17 @@ const main = async () => {
     );
   }
 
-  // Insert any remaining logs and blocks in the batch
+  // Insert any remaining logs, blocks, and transactions in the batch
   if (eventBatch.length > 0) {
     insertLogsBatch(eventBatch);
   }
 
   if (blockBatch.length > 0) {
     insertBlocksBatch(blockBatch);
+  }
+
+  if (transactionBatch.length > 0) {
+    insertTransactionsBatch(transactionBatch);
   }
 
   // Close the database connection
