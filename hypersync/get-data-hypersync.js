@@ -33,19 +33,19 @@ let query = {
       "number",
       "timestamp",
       "hash",
-      "extraData",
-      "gasLimit",
-      "gasUsed",
-      "logsBloom",
+      "extra_data",
+      "gas_limit",
+      "gas_used",
+      "logs_bloom",
       "miner",
-      "mixHash",
+      "mix_hash",
       "nonce",
-      "parentHash",
-      "receiptsRoot",
-      "sha3Uncles",
-      "stateRoot",
-      "totalDifficulty",
-      "transactionsRoot",
+      "parent_hash",
+      "receipts_root",
+      "sha3_uncles",
+      "state_root",
+      "total_difficulty",
+      "transactions_root",
       "size",
     ],
     log: [
@@ -67,6 +67,21 @@ let query = {
 
 // Connect to SQLite database
 const db = new sqlite3.Database("../.ponder/sqlite/ponder_sync.db");
+
+const convertHexToPaddedDecimal = (hexValue, totalLength) => {
+  try {
+    // Handle '0x00' explicitly
+    if (hexValue === "0x00") {
+      return "0".padStart(totalLength, "0");
+    }
+    // Convert hex to BigInt, then to string, then pad with leading zeros
+    const decimalValue = BigInt(hexValue).toString();
+    return decimalValue.padStart(totalLength, "0");
+  } catch (error) {
+    console.error(`Error converting hex value ${hexValue}:`, error);
+    return "0".padStart(totalLength, "0"); // Fallback to default value
+  }
+};
 
 // Function to insert data into the logs table
 const insertLogsBatch = (logs) => {
@@ -136,23 +151,140 @@ const insertLogsBatch = (logs) => {
   stmt.finalize();
 };
 
+// Function to insert data into the blocks table
+const insertBlocksBatch = (blocks) => {
+  const insertQuery = `
+    INSERT OR IGNORE INTO blocks (
+      difficulty, extraData, gasLimit, gasUsed, hash, logsBloom, miner,
+      number, parentHash, receiptsRoot, size, stateRoot, timestamp, transactionsRoot,
+      chainId, checkpoint, baseFeePerGas, mixHash, nonce, sha3Uncles, totalDifficulty
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  const stmt = db.prepare(insertQuery);
+
+  db.serialize(() => {
+    db.run("BEGIN TRANSACTION");
+    blocks.forEach((block) => {
+      const {
+        difficulty = "0x00",
+        extraData = "",
+        gasLimit = "0x00",
+        gasUsed = "0x00",
+        hash,
+        logsBloom = "".padEnd(514, "0"),
+        miner = "",
+        nonce = "".padStart(18, "0"),
+        number,
+        parentHash = "",
+        receiptsRoot = "",
+        sha3Uncles = "",
+        size = "0x00",
+        stateRoot = "",
+        timestamp,
+        totalDifficulty = "0x00",
+        transactionsRoot = "",
+        baseFeePerGas = "0x00",
+        mixHash = "",
+      } = block;
+      if (
+        number === undefined ||
+        timestamp === undefined ||
+        hash === undefined
+      ) {
+        console.error("Missing number, timestamp, or hash in block:", block);
+        return;
+      }
+
+      const numberStr = number.toString().padStart(79, "0");
+      const timestampStr = timestamp.toString().padStart(79, "0");
+      const difficultyStr = convertHexToPaddedDecimal(difficulty, 79); // Convert difficulty to padded decimal
+      const gasLimitStr = convertHexToPaddedDecimal(gasLimit, 79); // Convert gasLimit to padded decimal
+      const gasUsedStr = convertHexToPaddedDecimal(gasUsed, 79); // Convert gasUsed to padded decimal
+      const sizeStr = convertHexToPaddedDecimal(size, 79); // Convert size to padded decimal
+      const totalDifficultyStr = convertHexToPaddedDecimal(totalDifficulty, 79); // Convert totalDifficulty to padded decimal
+      const baseFeePerGasStr = convertHexToPaddedDecimal(baseFeePerGas, 79); // Convert baseFeePerGas to padded decimal
+      const checkpointValue = encodeCheckpoint({
+        blockTimestamp: timestamp,
+        chainId: 8453n,
+        blockNumber: BigInt(number),
+        transactionIndex: 9999999999999999n, // Not relevant for blocks
+        eventType: EVENT_TYPES.blocks, // Assuming blocks event type
+        eventIndex: 0n, // Not relevant for blocks
+      });
+
+      stmt.run([
+        difficultyStr,
+        extraData,
+        gasLimitStr,
+        gasUsedStr,
+        hash,
+        logsBloom,
+        miner,
+        numberStr,
+        parentHash,
+        receiptsRoot,
+        sizeStr,
+        stateRoot,
+        timestampStr,
+        transactionsRoot,
+        8453,
+        checkpointValue,
+        baseFeePerGasStr,
+        mixHash,
+        nonce,
+        sha3Uncles,
+        totalDifficultyStr,
+      ]);
+    });
+    db.run("COMMIT", (err) => {
+      if (err) {
+        console.error("Error committing transaction:", err.message);
+      }
+    });
+  });
+
+  stmt.finalize();
+};
+
+// Function to extract unique blocks from events
+const extractUniqueBlocks = (events) => {
+  const blockMap = new Map();
+
+  events.forEach((event) => {
+    const block = event.block;
+    if (!blockMap.has(block.hash)) {
+      blockMap.set(block.hash, block);
+    }
+  });
+
+  return Array.from(blockMap.values());
+};
+
 // Main function
 const main = async () => {
   let eventCount = 0;
   const startTime = performance.now();
   const batchSize = 1000;
   let eventBatch = [];
+  let blockBatch = [];
 
   // Initial non-parallelized request
   const res = await client.sendEventsReq(query);
   eventCount += res.events.length;
-  //   console.log("Initial events:", res.events);
+  console.log("Initial events:", res.events);
   eventBatch.push(...res.events);
+  blockBatch.push(...extractUniqueBlocks(res.events));
   query.fromBlock = res.nextBlock;
 
   if (eventBatch.length >= batchSize) {
     insertLogsBatch(eventBatch);
     eventBatch = [];
+  }
+
+  if (blockBatch.length >= batchSize) {
+    insertBlocksBatch(blockBatch);
+    blockBatch = [];
   }
 
   // Streaming events in parallel
@@ -173,10 +305,16 @@ const main = async () => {
 
     eventCount += res.events.length;
     eventBatch.push(...res.events);
+    blockBatch.push(...extractUniqueBlocks(res.events));
 
     if (eventBatch.length >= batchSize) {
       insertLogsBatch(eventBatch);
       eventBatch = [];
+    }
+
+    if (blockBatch.length >= batchSize) {
+      insertBlocksBatch(blockBatch);
+      blockBatch = [];
     }
 
     const currentTime = performance.now();
@@ -191,9 +329,13 @@ const main = async () => {
     );
   }
 
-  // Insert any remaining logs in the batch
+  // Insert any remaining logs and blocks in the batch
   if (eventBatch.length > 0) {
     insertLogsBatch(eventBatch);
+  }
+
+  if (blockBatch.length > 0) {
+    insertBlocksBatch(blockBatch);
   }
 
   // Close the database connection
