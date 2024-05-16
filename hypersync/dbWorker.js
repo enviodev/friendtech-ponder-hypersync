@@ -1,9 +1,11 @@
 import { parentPort } from "worker_threads";
 import Database from "better-sqlite3";
-import { encodeCheckpoint, EVENT_TYPES } from "./checkpoint.js";
+import { encodeCheckpoint, EVENT_TYPES } from "./checkpoint.js"; // Adjusted to import from the new JavaScript file
 
-// Connect to SQLite database using better-sqlite3
-const db = new Database("../.ponder/sqlite/ponder_sync.db");
+// Connect to SQLite database using better-sqlite3 with a busy timeout
+const db = new Database("../.ponder/sqlite/ponder_sync.db", {
+  busyTimeout: 60000,
+}); // 60 seconds
 
 // Function to convert hex to padded decimal
 const convertHexToPaddedDecimal = (hexValue, totalLength) => {
@@ -19,7 +21,7 @@ const convertHexToPaddedDecimal = (hexValue, totalLength) => {
   }
 };
 
-// Function to insert data into the logs table
+// Function to insert data into the logs table with retry logic
 const insertLogsBatch = (logs) => {
   const insertQuery = `
     INSERT OR IGNORE INTO logs (
@@ -77,7 +79,16 @@ const insertLogsBatch = (logs) => {
     }
   });
 
-  insertMany(logs);
+  try {
+    insertMany(logs);
+  } catch (error) {
+    if (error.code === "SQLITE_BUSY") {
+      console.error("Database is busy, retrying...");
+      setTimeout(() => insertMany(logs), 100); // Retry after 100ms
+    } else {
+      throw error;
+    }
+  }
 };
 
 // Function to insert data into the blocks table
@@ -167,7 +178,16 @@ const insertBlocksBatch = (blocks) => {
     }
   });
 
-  insertMany(blocks);
+  try {
+    insertMany(blocks);
+  } catch (error) {
+    if (error.code === "SQLITE_BUSY") {
+      console.error("Database is busy, retrying...");
+      setTimeout(() => insertMany(blocks), 100); // Retry after 100ms
+    } else {
+      throw error;
+    }
+  }
 };
 
 // Function to insert data into the transactions table
@@ -240,7 +260,16 @@ const insertTransactionsBatch = (transactions) => {
     }
   });
 
-  insertMany(transactions);
+  try {
+    insertMany(transactions);
+  } catch (error) {
+    if (error.code === "SQLITE_BUSY") {
+      console.error("Database is busy, retrying...");
+      setTimeout(() => insertMany(transactions), 100); // Retry after 100ms
+    } else {
+      throw error;
+    }
+  }
 };
 
 // Function to insert data into the logFilterIntervals table
@@ -263,35 +292,40 @@ const insertLogFilterInterval = (startBlock, endBlock) => {
 
 // Function to get the largest block number from the blocks table
 const getLargestBlockNumber = () => {
-  const stmt = db.prepare(
-    "SELECT MAX(CAST(number AS INTEGER)) as maxBlockNumber FROM blocks"
-  );
-  const result = stmt.get();
-  return result.maxBlockNumber ? result.maxBlockNumber : 0;
+  const query = `SELECT MAX(number) as maxBlockNumber FROM blocks`;
+  const row = db.prepare(query).get();
+  if (row && row.maxBlockNumber) {
+    return parseInt(row.maxBlockNumber);
+  }
+  return 0; // Return 0 if no blocks are found
 };
 
-// Handle messages from the main thread
-parentPort.on("message", (message) => {
-  switch (message.type) {
-    case "insertLogsBatch":
-      insertLogsBatch(message.data);
-      break;
-    case "insertBlocksBatch":
-      insertBlocksBatch(message.data);
-      break;
-    case "insertTransactionsBatch":
-      insertTransactionsBatch(message.data);
-      break;
-    case "insertLogFilterInterval":
-      insertLogFilterInterval(message.startBlock, message.endBlock);
-      break;
-    case "getLargestBlockNumber":
-      parentPort.postMessage(getLargestBlockNumber());
-      break;
-    case "close":
-      db.close();
-      break;
-    default:
-      console.error(`Unknown message type: ${message.type}`);
+// Handle messages from the parent thread
+parentPort.on("message", async (message) => {
+  try {
+    switch (message.type) {
+      case "insertLogsBatch":
+        insertLogsBatch(message.data);
+        break;
+      case "insertBlocksBatch":
+        insertBlocksBatch(message.data);
+        break;
+      case "insertTransactionsBatch":
+        insertTransactionsBatch(message.data);
+        break;
+      case "insertLogFilterInterval":
+        insertLogFilterInterval(message.startBlock, message.endBlock);
+        break;
+      case "getLargestBlockNumber":
+        parentPort.postMessage(await getLargestBlockNumber());
+        break;
+      case "close":
+        db.close();
+        break;
+      default:
+        console.error(`Unknown message type: ${message.type}`);
+    }
+  } catch (error) {
+    console.error(`Worker error: ${error}`);
   }
 });

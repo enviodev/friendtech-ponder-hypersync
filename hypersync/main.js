@@ -17,19 +17,39 @@ const client = HypersyncClient.new({
   url: "http://base.hypersync.xyz",
 });
 
-// Create a worker for database operations
-const dbWorker = new Worker("./dbWorker.js");
+// Create multiple workers for database operations
+const numWorkers = 4;
+const dbWorkers = [];
+for (let i = 0; i < numWorkers; i++) {
+  const worker = new Worker("./dbWorker.js");
+  worker.on("error", (error) => {
+    console.error(`Worker ${i} error:`, error);
+  });
+  worker.on("message", (message) => {
+    console.log(`Worker ${i} message:`, message);
+  });
+  dbWorkers.push(worker);
+}
 
-// Function to send messages to the worker
+let currentWorkerIndex = 0;
+const getNextWorker = () => {
+  const worker = dbWorkers[currentWorkerIndex];
+  currentWorkerIndex = (currentWorkerIndex + 1) % numWorkers;
+  return worker;
+};
+
+// Function to send messages to the workers
 const sendToWorker = (message) => {
-  dbWorker.postMessage(message);
+  const worker = getNextWorker();
+  worker.postMessage(message);
 };
 
 // Function to get the largest block number from the blocks table
 const getLargestBlockNumber = () => {
   return new Promise((resolve, reject) => {
-    dbWorker.once("message", resolve);
-    dbWorker.postMessage({ type: "getLargestBlockNumber" });
+    const worker = getNextWorker();
+    worker.once("message", resolve);
+    worker.postMessage({ type: "getLargestBlockNumber" });
   });
 };
 
@@ -134,7 +154,7 @@ const extractUniqueBlocksAndTransactions = (events) => {
 const main = async () => {
   let eventCount = 0;
   const startTime = performance.now();
-  const batchSize = 1000; // Adjusted batch size
+  const batchSize = 5000; // Increased batch size
   let eventBatch = [];
   let blockBatch = [];
   let transactionBatch = [];
@@ -269,7 +289,7 @@ const main = async () => {
   }
 
   // Close the database connection
-  dbWorker.postMessage({ type: "close" });
+  dbWorkers.forEach((worker) => worker.postMessage({ type: "close" }));
 };
 
 main();
