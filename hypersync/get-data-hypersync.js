@@ -9,6 +9,20 @@ const event_signatures = [
 ];
 const FRIENDTECH_ADDRESS = "0xCF205808Ed36593aa40a44F10c7f7C2F67d4A4d4";
 
+// Connect to SQLite database using better-sqlite3
+const db = new Database("../.ponder/sqlite/ponder_sync.db");
+
+// Function to get the largest block number from the blocks table
+const getLargestBlockNumber = () => {
+  const row = db
+    .prepare("SELECT MAX(number) as maxBlockNumber FROM blocks")
+    .get();
+  return row.maxBlockNumber ? parseInt(row.maxBlockNumber, 10) : 0;
+};
+// Get the largest block number from the blocks table
+const largestBlockNumber = getLargestBlockNumber();
+console.log(largestBlockNumber);
+
 // Generate topic0 list from event signatures
 const topic0_list = event_signatures.map((sig) => keccak256(toHex(sig)));
 console.log(topic0_list);
@@ -20,7 +34,7 @@ const client = HypersyncClient.new({
 
 // Query setup
 let query = {
-  fromBlock: 0,
+  fromBlock: largestBlockNumber + 1,
   logs: [
     {
       address: [FRIENDTECH_ADDRESS],
@@ -90,14 +104,6 @@ let query = {
     ],
   },
 };
-
-// Connect to SQLite database using better-sqlite3
-const db = new Database(
-  "../.ponder/sqlite/ponder_sync.db"
-  // {
-  //   verbose: console.log,
-  // }
-);
 
 // Function to convert hex to padded decimal
 const convertHexToPaddedDecimal = (hexValue, totalLength) => {
@@ -392,7 +398,7 @@ const main = async () => {
   // Initial non-parallelized request
   const res = await client.sendEventsReq(query);
   eventCount += res.events.length;
-  console.log("Initial events:", res.events);
+  // console.log("Initial events:", res.events);
   eventBatch.push(...res.events);
   const { blocks, transactions } = extractUniqueBlocksAndTransactions(
     res.events
