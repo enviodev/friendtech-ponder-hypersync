@@ -11,6 +11,9 @@ dependencies:
   '@ponder/core':
     specifier: ^0.4.22
     version: 0.4.22(@types/node@20.12.11)(typescript@5.4.5)(viem@1.21.4)
+  better-sqlite3:
+    specifier: ^10.0.0
+    version: 10.0.0
   sqlite3:
     specifier: ^5.1.7
     version: 5.1.7
@@ -1278,6 +1281,14 @@ packages:
 
   /base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
+    dev: false
+
+  /better-sqlite3@10.0.0:
+    resolution: {integrity: sha512-rOz0JY8bt9oMgrFssP7GnvA5R3yln73y/NizzWqy3WlFth8Ux8+g4r/N9fjX97nn4X1YX6MTER2doNpTu5pqiA==}
+    requiresBuild: true
+    dependencies:
+      bindings: 1.5.0
+      prebuild-install: 7.1.2
     dev: false
 
   /better-sqlite3@9.6.0:
