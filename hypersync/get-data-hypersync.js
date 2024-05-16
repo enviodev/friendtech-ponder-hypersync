@@ -337,6 +337,24 @@ const insertTransactionsBatch = (transactions) => {
   insertMany(transactions);
 };
 
+// Function to insert data into the logFilterIntervals table
+const insertLogFilterInterval = (startBlock, endBlock) => {
+  const insertQuery = `
+    INSERT INTO logFilterIntervals (
+      logFilterId, startBlock, endBlock
+    ) VALUES (?, ?, ?)
+  `;
+
+  const logFilterId =
+    "8453_0xcf205808ed36593aa40a44f10c7f7c2f67d4a4d4_0x2c76e7a47fd53e2854856ac3f0a5f3ee40d15cfaa82266357ea9779c486ab9c3_null_null_null_0";
+
+  const startBlockStr = startBlock.toString().padStart(79, "0");
+  const endBlockStr = endBlock.toString().padStart(79, "0");
+
+  const stmt = db.prepare(insertQuery);
+  stmt.run(logFilterId, startBlockStr, endBlockStr);
+};
+
 // Function to extract unique blocks and transactions from events
 const extractUniqueBlocksAndTransactions = (events) => {
   const blockMap = new Map();
@@ -369,7 +387,7 @@ const main = async () => {
   let eventBatch = [];
   let blockBatch = [];
   let transactionBatch = [];
-  const memoryCheckInterval = 30_000; // Check memory every 10 seconds
+  const memoryCheckInterval = 30_000; // Check memory every 30 seconds
 
   // Initial non-parallelized request
   const res = await client.sendEventsReq(query);
@@ -385,6 +403,10 @@ const main = async () => {
 
   if (eventBatch.length >= batchSize) {
     insertLogsBatch(eventBatch);
+    insertLogFilterInterval(
+      eventBatch[0].block.number,
+      eventBatch[eventBatch.length - 1].block.number
+    );
     eventBatch = [];
   }
 
@@ -439,6 +461,10 @@ const main = async () => {
 
     if (eventBatch.length >= batchSize) {
       insertLogsBatch(eventBatch);
+      insertLogFilterInterval(
+        eventBatch[0].block.number,
+        eventBatch[eventBatch.length - 1].block.number
+      );
       eventBatch = [];
     }
 
@@ -470,6 +496,10 @@ const main = async () => {
   // Insert any remaining logs, blocks, and transactions in the batch
   if (eventBatch.length > 0) {
     insertLogsBatch(eventBatch);
+    insertLogFilterInterval(
+      eventBatch[0].block.number,
+      eventBatch[eventBatch.length - 1].block.number
+    );
   }
 
   if (blockBatch.length > 0) {
