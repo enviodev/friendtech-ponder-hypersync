@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@envio-dev/hypersync-client": "^0.1.10",
-    "@ponder/core": "^0.4.22",
+    "@ponder/core": "^0.4.37",
     "better-sqlite3": "^10.0.0",
     "sqlite3": "^5.1.7",
     "viem": "^1.19.9"

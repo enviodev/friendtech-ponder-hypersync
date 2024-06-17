@@ -9,8 +9,8 @@ dependencies:
     specifier: ^0.1.10
     version: 0.1.10
   '@ponder/core':
-    specifier: ^0.4.22
-    version: 0.4.22(@types/node@20.12.11)(typescript@5.4.5)(viem@1.21.4)
+    specifier: ^0.4.37
+    version: 0.4.38(@types/node@20.12.11)(typescript@5.4.5)(viem@1.21.4)
   better-sqlite3:
     specifier: ^10.0.0
     version: 10.0.0
@@ -553,8 +553,8 @@ packages:
       tslib: 2.6.2
     dev: false
 
-  /@hono/node-server@1.11.1:
-    resolution: {integrity: sha512-GW1Iomhmm1o4Z+X57xGby8A35Cu9UZLL7pSMdqDBkD99U5cywff8F+8hLk5aBTzNubnsFAvWQ/fZjNwPsEn9lA==}
+  /@hono/node-server@1.11.2:
+    resolution: {integrity: sha512-JhX0nUC66GeDxpIdMKWDRMEwtQBa64CY907iAF1sYqb4m2p2PdSU7zkbnNhAZLg/6IjSlTuj6CF307JlBXVvpg==}
     engines: {node: '>=18.14.1'}
     dev: false
 
@@ -667,8 +667,8 @@ packages:
     dev: false
     optional: true
 
-  /@ponder/core@0.4.22(@types/node@20.12.11)(typescript@5.4.5)(viem@1.21.4):
-    resolution: {integrity: sha512-Xm4cvcZXGat31vLaQxa/oSLph8Ps9w0dCqNDWZOIF26eozA4vpfNh7MJO2kDwF/JYPN8Sz6Hm4aKmpym5BmncA==}
+  /@ponder/core@0.4.38(@types/node@20.12.11)(typescript@5.4.5)(viem@1.21.4):
+    resolution: {integrity: sha512-kF4ZCbEMRIxnQVfg5CI8AuYyIpJzkUMVZgdT3lh8CiuG4bGOt9giFW9N8yTzCeKtpV6u6hQT0zMy3o68NwznUA==}
     engines: {node: '>=18.14'}
     hasBin: true
     peerDependencies:
@@ -683,10 +683,10 @@ packages:
       '@escape.tech/graphql-armor-max-aliases': 2.3.0
       '@escape.tech/graphql-armor-max-depth': 2.2.0
       '@escape.tech/graphql-armor-max-tokens': 2.3.0
-      '@hono/node-server': 1.11.1
-      '@ponder/utils': 0.1.4(typescript@5.4.5)(viem@1.21.4)
+      '@hono/node-server': 1.11.2
+      '@ponder/utils': 0.1.6(typescript@5.4.5)(viem@1.21.4)
       abitype: 0.10.3(typescript@5.4.5)
-      better-sqlite3: 9.6.0
+      better-sqlite3: 10.0.0
       commander: 12.0.0
       conf: 12.0.0
       dataloader: 2.2.2
@@ -696,8 +696,9 @@ packages:
       ethereum-bloom-filters: 1.1.0
       glob: 10.3.14
       graphql: 16.8.1
+      graphql-type-json: 0.3.2(graphql@16.8.1)
       graphql-yoga: 5.3.1(graphql@16.8.1)
-      hono: 4.3.4
+      hono: 4.4.2
       http-terminator: 3.2.0
       ink: 4.4.1(react@18.3.1)
       kysely: 0.26.3
@@ -732,8 +733,8 @@ packages:
       - zod
     dev: false
 
-  /@ponder/utils@0.1.4(typescript@5.4.5)(viem@1.21.4):
-    resolution: {integrity: sha512-NszanAm2DWZqCcv3XMkpgx9mfbMD8qc9ifux6xwWaryJbo9Ofu/zpvU0CIf7192WrrROaXQyWjfXHLf8Lf/YXg==}
+  /@ponder/utils@0.1.6(typescript@5.4.5)(viem@1.21.4):
+    resolution: {integrity: sha512-j0/nq8k356oZfHtNWn3NumVUlZdPjgIhtXTsiTR/7FYV+tvv6kj4FL1809WARxAhL4qDADHxErz9/A4/uxuw0w==}
     peerDependencies:
       typescript: '>=5.0.4'
       viem: '>=1.16'
@@ -1285,14 +1286,6 @@ packages:
 
   /better-sqlite3@10.0.0:
     resolution: {integrity: sha512-rOz0JY8bt9oMgrFssP7GnvA5R3yln73y/NizzWqy3WlFth8Ux8+g4r/N9fjX97nn4X1YX6MTER2doNpTu5pqiA==}
-    requiresBuild: true
-    dependencies:
-      bindings: 1.5.0
-      prebuild-install: 7.1.2
-    dev: false
-
-  /better-sqlite3@9.6.0:
-    resolution: {integrity: sha512-yR5HATnqeYNVnkaUTf4bOP2dJSnyhP4puJN/QPRyx4YkBEEUxib422n2XzPqDEHjQQqazoYoADdAm5vE15+dAQ==}
     requiresBuild: true
     dependencies:
       bindings: 1.5.0
@@ -2089,6 +2082,14 @@ packages:
     resolution: {integrity: sha512-EtKwoO6kxCL9WO5xipiHTZlSzBm7WLT627TqC/uVRd0HKmq8NXyebnNYxDoBi7wt8eTWrUrKXCOVaFq9x1kgag==}
     dev: true
 
+  /graphql-type-json@0.3.2(graphql@16.8.1):
+    resolution: {integrity: sha512-J+vjof74oMlCWXSvt0DOf2APEdZOCdubEvGDUAlqH//VBYcOYsGgRW7Xzorr44LvkjiuvecWc8fChxuZZbChtg==}
+    peerDependencies:
+      graphql: '>=0.8.0'
+    dependencies:
+      graphql: 16.8.1
+    dev: false
+
   /graphql-yoga@5.3.1(graphql@16.8.1):
     resolution: {integrity: sha512-n918QV6TF7xTjb9ASnozgsr4ydMc08c+x4eRAWKxxWVwSnzdP2xeN2zw1ljIzRD0ccSCNoBajGDKwcZkJDitPA==}
     engines: {node: '>=18.0.0'}
@@ -2130,8 +2131,8 @@ packages:
     dev: false
     optional: true
 
-  /hono@4.3.4:
-    resolution: {integrity: sha512-oh+PBwW8yElj3bUlY2dTXhuPt1MCZp6Nb04tejLwY+GXdphQH6uCpUP0dY5iLvFY5wM8fNHrMx1QeMKbhnzw9w==}
+  /hono@4.4.2:
+    resolution: {integrity: sha512-bRhZ+BM9r04lRN2i9wiZ18yQNbZxHsmmRIItoAb43nRkHnIDsFhFh4mJ0seEs06FvenibpAgSVNHQ8ZzcDQx2A==}
     engines: {node: '>=16.0.0'}
     dev: false
 
